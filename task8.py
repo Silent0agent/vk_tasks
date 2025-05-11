@@ -1,9 +1,9 @@
-from flask import Flask, render_template
-from vk_api import vk_api
+import random
+from vk_api.bot_longpoll import VkBotLongPoll, VkBotEventType
 
-from config import LOGIN, PASSWORD
+from config import LOGIN, PASSWORD, GROUP_ID, ALBUM_ID, TOKEN
 
-app = Flask(__name__)
+import vk_api
 
 
 def captcha_handler(captcha):
@@ -31,46 +31,55 @@ def auth_handler():
     return key, remember_device
 
 
-@app.route("/vk_stat/<int:group_id>")
-def get_activities(group_id):
+def main():
     login, password = LOGIN, PASSWORD
+    group_id, album_id = GROUP_ID, ALBUM_ID
+    token = TOKEN
     vk_session = vk_api.VkApi(
         login, password,
         # функция для обработки двухфакторной аутентификации
         auth_handler=auth_handler,
         captcha_handler=captcha_handler
     )
-
+    bot_session = vk_api.VkApi(token=token)
     try:
         vk_session.auth(token_only=True)
     except vk_api.AuthError as error_msg:
         print(error_msg)
         return
-    vk = vk_session.get_api()
-    stats = vk.stats.get(group_id=group_id, intervals_count=10)
-    result = {'likes': 0,
-              'comments': 0,
-              'subscribed': 0,
-              'ages': {},
-              'cities': set()}
-    for period in stats:
-        if 'activity' in period:
-            result['likes'] += period['activity'].get('likes', 0)
-            result['comments'] += period['activity'].get('comments', 0)
-            result['subscribed'] += period['activity'].get('subscribed', 0)
-        if 'reach' in period:
-            for age in period['reach'].get('age', []):
-                count, value = age['count'], age['value']
-                result['ages'][value] = result['ages'].get(value, 0) + count
-            for city in period['reach'].get('cities', []):
-                result['cities'].add(city['name'])
-    result['ages'] = sorted(list(result['ages'].items()))
-    result['cities'] = list(result['cities'])
-    return render_template('statistics.html', **result)
+    longpoll = VkBotLongPoll(bot_session, group_id)
+    print('start polling')
+    for event in longpoll.listen():
+        if event.type == VkBotEventType.MESSAGE_NEW:
+            bot = bot_session.get_api()
+            user_id = event.obj.message['from_id']
+            vk = vk_session.get_api()
 
+            user_response = vk.users.get(user_id=user_id)
+            first_name = user_response[0].get('first_name')
+            msg = f"Привет, {first_name}!"
 
-def main():
-    app.run(host='127.0.0.1', port=8080)
+            photos_response = vk.photos.get(album_id=album_id, group_id=group_id)
+            items = photos_response.get('items')
+            if not items:
+                random_photo = None
+                msg = msg + ' Фотографий нет.'
+            else:
+                photos_list = []
+                for photo in items:
+                    photos_list.append(f"photo{photo['owner_id']}_{photo['id']}")
+                random_photo = random.choice(photos_list)
+            if random_photo:
+                bot.messages.send(user_id=user_id,
+                                  message=msg,
+                                  random_id=random.randint(0, 2 ** 63 - 1),
+                                  attachment=[random_photo]
+                                  )
+            else:
+                bot.messages.send(user_id=user_id,
+                                  message=msg,
+                                  random_id=random.randint(0, 2 ** 63 - 1)
+                                  )
 
 
 if __name__ == '__main__':
