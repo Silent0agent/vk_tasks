@@ -1,4 +1,7 @@
-from config import LOGIN, PASSWORD, GROUP_ID, ALBUM_ID
+import random
+from vk_api.bot_longpoll import VkBotLongPoll, VkBotEventType
+
+from config import LOGIN, PASSWORD, GROUP_ID, ALBUM_ID, TOKEN
 
 import vk_api
 
@@ -31,28 +34,53 @@ def auth_handler():
 def main():
     login, password = LOGIN, PASSWORD
     group_id, album_id = GROUP_ID, ALBUM_ID
+    token = TOKEN
     vk_session = vk_api.VkApi(
         login, password,
         # функция для обработки двухфакторной аутентификации
         auth_handler=auth_handler,
         captcha_handler=captcha_handler
     )
+    bot_session = vk_api.VkApi(token=token)
     try:
         vk_session.auth(token_only=True)
     except vk_api.AuthError as error_msg:
         print(error_msg)
         return
-    vk = vk_session.get_api()
-    response = vk.photos.get(album_id=album_id, group_id=group_id)
-    items = response.get('items')
-    if not items:
-        print('Нет фотографий')
-        return
-    for photo in items:
-        orig_photo = photo['orig_photo']
-        print(f"url: {orig_photo['url']}")
-        print(f"Размер: {orig_photo['width']} ✕ {orig_photo['height']}")
-        print()
+    longpoll = VkBotLongPoll(bot_session, group_id)
+    print('start polling')
+    for event in longpoll.listen():
+        if event.type == VkBotEventType.MESSAGE_NEW:
+            bot = bot_session.get_api()
+            user_id = event.obj.message['from_id']
+            vk = vk_session.get_api()
+
+            user_response = vk.users.get(user_id=user_id)
+            first_name = user_response[0].get('first_name')
+            msg = f"Привет, {first_name}!"
+
+            photos_response = vk.photos.get(album_id=album_id, group_id=group_id)
+            items = photos_response.get('items')
+            if not items:
+                random_photo = None
+                msg = msg + ' Фотографий нет.'
+            else:
+                photos_list = []
+                for photo in items:
+                    photos_list.append(f"photo{photo['owner_id']}_{photo['id']}")
+                random_photo = random.choice(photos_list)
+            if random_photo:
+                bot.messages.send(user_id=user_id,
+                                  message=msg,
+                                  random_id=random.randint(0, 2 ** 63 - 1),
+                                  attachment=[random_photo]
+                                  )
+            else:
+                bot.messages.send(user_id=user_id,
+                                  message=msg,
+                                  random_id=random.randint(0, 2 ** 63 - 1)
+                                  )
+
 
 if __name__ == '__main__':
     main()
