@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h2 style="text-align: center; color: #9a3ba5">Activities</h2>
+<div>
+    <table class="table table-bordered table-hover">
+        <tr>
+            <td style="background: #9a3ba5">likes</td>
+            <td style="background: #ee82ee">{{ likes }}</td>
+        </tr>
+        <tr>
+            <td style="background: #9a3ba5">comments</td>
+            <td style="background: #ee82ee">{{ comments }}</td>
+        </tr>
+        <tr>
+            <td style="background: #9a3ba5">subscribed</td>
+            <td style="background: #ee82ee">{{ subscribed }}</td>
+        </tr>
+    </table>
+</div>
+<h2 style="text-align: center; color: #30ba8f">Ages</h2>
+<div>
+    <table class="table table-bordered table-hover">
+        {% for age in ages %}
+        <tr>
+            <td style="background: #30ba8f">{{ age[0] }}</td>
+            <td style="background: #7FFFD4">{{ age[1] }}</td>
+        </tr>
+        {% endfor %}
+    </table>
+</div>
+<h2 style="text-align: center; color: #ca0147">Cities</h2>
+<div>
+    <table class="table table-bordered table-hover">
+        {% for city in cities %}
+        <tr>
+            <td style="background: #f49d85">{{ city }}</td>
+        </tr>
+        {% endfor %}
+    </table>
+</div>
+{% endblock %}
